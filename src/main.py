@@ -61,9 +61,9 @@ def main():
     # Guardamos los resultados
     print("\n📦 Resultados de la simulación de compras")
     print("-"*60)
-    dm.save_df(df_purchase, "Purchase")
-    dm.save_df(df_purchase_item, "Purchase_Item")
-    dm.save_df(df_items, "Items")
+    dm.save_df(df_purchase, "Purchase", if_exists="append")
+    dm.save_df(df_purchase_item, "Purchase_Item", if_exists="append")
+    dm.save_df(df_items, "Item", if_exists="append")
     print("✅ Datos de simulación guardados correctamente.\n")
 
     # ---------------------------------------------------------
@@ -109,7 +109,6 @@ def main():
         df_recom, df_prom = RCE.recomendation_promotion_for_customer_df(
             customer_id,
             df_emotions=None,
-            n=5
         )
 
         recoms_list.append(df_recom)
@@ -151,7 +150,7 @@ def main():
 
     # Calculamos nuevos precios y los guardamos
     df_ropa_dp = DPE.apply_best_prices()
-    dm.save_df(df_ropa_dp, "Product")
+    dm.save_df(df_ropa_dp, "Product", if_exists="replace")
 
 if __name__ == "__main__":
     main()

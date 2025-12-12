@@ -46,7 +46,7 @@ class RecommendationEngine:
     # ---------------------------------------------------------
     # Calcular pesos de productos según preferencias y top products
     # ---------------------------------------------------------
-    def _compute_product_weights(self, customer_row, cluster_row):
+    def _compute_product_weights(self, customer_row, cluster_row, df_emotions=None, df_locations=None):
         df = self.df_catalogo.copy()
         df["weight"] = 1.0
 
@@ -71,7 +71,7 @@ class RecommendationEngine:
     # ---------------------------------------------------------
     # Recomendar productos y devolver DataFrame listo para DB
     # ---------------------------------------------------------
-    def recomendation_promotion_for_customer_df(self, customer_id, df_emotions=None, df_locations=None, n=5):
+    def recomendation_promotion_for_customer_df(self, customer_id, df_emotions=None, df_locations=None):
         # Obtener datos del cliente
         row = self.df_perfiles[self.df_perfiles["customer_id"] == customer_id]
         if row.empty:
@@ -82,31 +82,35 @@ class RecommendationEngine:
         cluster_id = int(row["cluster"])
         cluster_row = self.df_clusters[self.df_clusters["cluster"] == cluster_id].iloc[0]
 
-        # Calcular pesos de los productos
-        df_weights = self._compute_product_weights(row, cluster_row)
+        # Calcular pesos
+        df_weights = self._compute_product_weights(row, cluster_row,  df_emotions, df_locations)
 
-        # Seleccionar top n productos
-        top_products = df_weights.sort_values("weight", ascending=False).head(n)
+        # Ordenar por weight descendente
+        df_weights = df_weights.sort_values("weight", ascending=False)
 
-        # Recomendaciones
-        recs_df = pd.DataFrame({
-            "recommendation_id": range(self.next_recommendation_id,
-                                    self.next_recommendation_id + len(top_products)),
-            "customer_id": customer_id,
-            "product_id": top_products["product_id"].values,
-            "weight": top_products["weight"].values
-        })
-        self.next_recommendation_id += len(top_products)
+        # --- PROMOCIONES (top 3) ---
+        top_proms = df_weights.head(3)
 
-        # Promociones
         proms_df = pd.DataFrame({
             "promotion_id": range(self.next_promotion_id,
-                                self.next_promotion_id + len(top_products)),
+                                self.next_promotion_id + len(top_proms)),
             "customer_id": customer_id,
-            "product_id": top_products["product_id"].values,
+            "product_id": top_proms["product_id"].values,
             "discount_percentage": ((row["average_discount"] + cluster_row["average_discount"]) / 2)
-                                * top_products["weight"].values
+                                    * top_proms["weight"].values
         })
-        self.next_promotion_id += len(top_products)
+        self.next_promotion_id += len(top_proms)
+
+        # --- RECOMENDACIONES (los 5 siguientes) ---
+        top_recs = df_weights.iloc[3:8]  # posiciones 3,4,5,6,7
+
+        recs_df = pd.DataFrame({
+            "recommendation_id": range(self.next_recommendation_id,
+                                    self.next_recommendation_id + len(top_recs)),
+            "customer_id": customer_id,
+            "product_id": top_recs["product_id"].values,
+            "weight": top_recs["weight"].values
+        })
+        self.next_recommendation_id += len(top_recs)
 
         return recs_df.reset_index(drop=True), proms_df.reset_index(drop=True)

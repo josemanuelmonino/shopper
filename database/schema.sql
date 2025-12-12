@@ -128,9 +128,11 @@ CREATE TABLE IF NOT EXISTS Recommendation (
 -- Tabla de promociones activas
 CREATE TABLE IF NOT EXISTS Promotion (
     promotion_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    recommendation_id INTEGER NOT NULL,
+    customer_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
     discount_percentage REAL NOT NULL,
-    FOREIGN KEY (recommendation_id) REFERENCES Recommendation(recommendation_id)
+    FOREIGN KEY (customer_id) REFERENCES CustomerInfo(customer_id),
+    FOREIGN KEY (product_id) REFERENCES Product(product_id)
 );
 
 -- Tabla de alertas activas

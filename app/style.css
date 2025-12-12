@@ -1,0 +1,57 @@
+/* style.css */
+.stApp, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp label {
+    color: #ff5630;
+}
+
+/* Centrar headers dentro de las columnas */
+[data-testid="stVerticalBlock"] h2,
+[data-testid="stVerticalBlock"] p {
+    text-align: center !important;
+}
+
+.camera-frame video {
+    border-radius: 12px !important;
+    max-height: 400px !important;
+    box-shadow: 0px 6px 18px rgba(0,0,0,0.25);
+}
+
+/* Hide Streamlit chrome */
+#MainMenu, header, footer {visibility: hidden;}
+.block-container {padding-top: 0rem !important;}
+
+/* Radio horizontal grande */
+div[role="radiogroup"] {
+    display: flex !important;
+    gap: 30px !important;
+    flex-wrap: nowrap !important;
+}
+
+div[role="radiogroup"] > label {
+    min-width: 250px !important;
+    max-width: 400px !important;
+    padding: 10px 20px !important;
+    margin-left: 50px !important;
+    border-radius: 12px !important;
+    border: 2px solid #ff5630 !important;
+    cursor: pointer;
+}
+
+div[role="radiogroup"] p {
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    color: #ff5630 !important;
+    margin: 0px !important;
+}
+
+div[role="radiogroup"] > label[data-selected="true"] {
+    background-color: #ff5630 !important;
+}
+
+div[role="radiogroup"] > label[data-selected="true"] p {
+    color: white !important;
+}
+
+.stColumn {
+    max-height: 1000px;
+    overflow-y: auto;
+}

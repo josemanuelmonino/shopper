@@ -9,7 +9,7 @@ from db_manager import DataManagerSimple
 dm = DataManagerSimple("database/shopper.db")
 
 # Leer la tabla CustomerProfile en un DataFrame
-df_customers = dm.read_df("CustomerInfo")
+df_customers = dm.read_df("Items")
 
 # Mostrar las primeras filas
 print(df_customers.head())
