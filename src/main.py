@@ -64,7 +64,7 @@ def main():
     print("\n📦 Resultados de la simulación de compras")
     print("-"*60)
     dm.save_df(df_purchase, "Purchase", if_exists="append")
-    dm.save_df(df_purchase_item, "Purchase_Item", if_exists="append")
+    dm.save_df(df_purchase_item, "PurchaseItem", if_exists="append")
     dm.save_df(df_items, "Item")
     print("✅ Datos de simulación guardados correctamente.\n")
 

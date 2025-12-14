@@ -18,8 +18,8 @@ def generate_bag_positions(num_points: int) -> pd.DataFrame:
         zone = "HOT_SPOT" if random.random() < 0.4 else "TRANSIT"
         x, y = get_coords(zone)
         record = {
-            "bag_id": f"BAG_{(i % 15 + 1):05d}",
-            "customer_id": f"CUST_{(i % 40 + 1):05d}",
+            "bag_id": f"BAG-{(i % 15 + 1):05d}",
+            "customer_id": f"CUST-{(i % 40 + 1):05d}",
             "session_id": str(uuid.uuid4()),
             "x": x,
             "y": y,

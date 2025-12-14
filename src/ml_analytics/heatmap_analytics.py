@@ -45,7 +45,7 @@ def generate_heatmaps_per_customer(df_locations: pd.DataFrame) -> pd.DataFrame:
     matrix_global = generate_density_matrix(df_locations)
     matrix_global_json = json.dumps(matrix_global.tolist())
     records.append({
-        "customer_id": "CUST_00000",
+        "customer_id": "CUST-00000",
         "heatmap": matrix_global_json
     })
 
