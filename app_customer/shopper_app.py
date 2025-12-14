@@ -1,11 +1,14 @@
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer
+from streamlit_autorefresh import st_autorefresh
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 from db_manager import DataManagerSimple
 import time
 import pandas as pd
 import uuid
+import queue
+from src.ml_analytics.facialrecognition import FaceEmotionProcessor, EmotionLiveProcessor
 
 # -------- CONFIG ----------
 st.set_page_config(page_title="Shopper", layout="wide")
@@ -36,6 +39,11 @@ if "df_proms" not in st.session_state:
     st.session_state.df_proms = dm.read_df("Promotion")
 if "cart" not in st.session_state:
     st.session_state.cart = []
+
+if "cand_id" not in st.session_state:
+    st.session_state.cand_id = None
+if "cand_hits" not in st.session_state:
+    st.session_state.cand_hits = 0
 
 if not st.session_state.df_clientes.empty:
     # Tomamos el último número, ignorando el prefijo
@@ -281,93 +289,148 @@ st.markdown("---")
 
 # -------- MAIN LAYOUT: 3 columnas ----------
 left_col, center_col, right_col = st.columns([2, 3, 2])
+# -------- MAIN LAYOUT: 3 columnas ----------
+left_col, center_col, right_col = st.columns([2, 3, 2])
 
 # -------- CENTER: Cámara ----------
 with center_col:
-    webrtc_ctx = webrtc_streamer(
-        key="live_cam",
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True
-    )
+    
+    # CASO 1: NO LOGUEADO -> MOSTRAR CÁMARA Y BUSCAR
     if not st.session_state.logged_in:
-        # --- Botón de login alternativo ---
-        if st.button("Login with email"):
-            st.session_state.show_login_form = not st.session_state.show_login_form
+        st.write("###Face Login System")
+        
+        # 1. INICIAR EL STREAMER (Solo si no estamos logueados)
+        ctx = webrtc_streamer(
+            key="live_cam",
+            video_processor_factory=FaceEmotionProcessor,
+            media_stream_constraints={
+                "video": {"width": {"min": 1280, "ideal": 1920}, "height": {"min": 720, "ideal": 1080}},
+                "audio": False
+            },
+            async_processing=True,
+            desired_playing_state=True,
+        )
 
-        # --- Formulario de login existente ---
-        if st.session_state.show_login_form:
-            st.subheader("Login with email and password")
-            email = st.text_input("Email address", key="login_email", placeholder="Enter your email")
-            password = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password")
+        # Auto-refresh para mantener el bucle vivo mientras busca
+        if getattr(ctx.state, "playing", False):
+            st_autorefresh(interval=500, key="cam_poll")
 
-            if st.button("Login", key="login_btn"):
-                def login_db(email, password, df_clientes):
-                    user = df_clientes.loc[df_clientes["email"] == email]
-                    if user.empty:
-                        return None
-                    if str(user["pass"].values[0]) == str(password):
-                        return user.iloc[0]
-                    return None
+        # 2. LÓGICA DE PROCESAMIENTO DE COLA (Tu código corregido)
+        if ctx.video_processor:
+            try:
+                while True:
+                    detected_name = ctx.video_processor.result_queue.get_nowait()
+                    detected_clean = str(detected_name).strip()
+                    
+                    # Feedback visual
+                    st.toast(f"Detectado: {detected_clean} (Hits: {st.session_state.cand_hits})")
 
-                st.session_state.user = login_db(email, password, st.session_state.df_clientes)
-                st.session_state.session_id = str(uuid.uuid4())
+                    if st.session_state.cand_id == detected_clean:
+                        st.session_state.cand_hits += 1
+                    else:
+                        st.session_state.cand_id = detected_clean
+                        st.session_state.cand_hits = 0
 
-                if st.session_state.user is not None:
-                    st.session_state.logged_in = True
+                    # --- LOGIN ÉXITO ---
+                    if st.session_state.cand_hits >= 2:
+                        st.session_state.df_clientes = dm.read_df("CustomerInfo")
+                        dfc = st.session_state.df_clientes.copy()
 
-                    # --- Conseguir recomendaciones y ofertas del usuario (de esta forma se ejecuta solo 1 vez) ---
-                    customer_id = st.session_state.user["customer_id"]
-                    st.session_state.df_user_recs = st.session_state.df_recomms[
-                        st.session_state.df_recomms["customer_id"] == customer_id
-                    ]
+                        # Búsqueda por ID o por nombre
+                        user_match = dfc[dfc["customer_id"].astype(str) == detected_clean]
+                        if user_match.empty:
+                            name_search = detected_clean.replace("_", " ").lower()
+                            user_match = dfc[dfc["name"].astype(str).str.lower().str.contains(name_search)]
 
-                    st.session_state.df_user_proms = st.session_state.df_proms[
-                        st.session_state.df_proms["customer_id"] == customer_id
-                    ]
+                        if not user_match.empty:
+                            st.session_state.user = user_match.iloc[0]
+                            st.session_state.logged_in = True
+                            st.session_state.session_id = str(uuid.uuid4())
 
-                    st.rerun()
-                else:
-                    st.error("Incorrect email or password")
+                            # ✅ IMPORTANTE: cargar recs/promos al loguear (esto viene de tu versión)
+                            customer_id = st.session_state.user["customer_id"]
+                            st.session_state.df_user_recs = st.session_state.df_recomms[
+                                st.session_state.df_recomms["customer_id"] == customer_id
+                            ]
+                            st.session_state.df_user_proms = st.session_state.df_proms[
+                                st.session_state.df_proms["customer_id"] == customer_id
+                            ]
 
-        # --- Botón para crear cuenta / sign in ---
-        if st.button("Sign in"):
-            st.session_state.show_sign_form = not st.session_state.show_sign_form
-
-        # --- Formulario de sign in / create account ---
-        if st.session_state.show_sign_form:
-            st.subheader("Create your own Shopper account")
-            new_name = st.text_input("Full Name", key="sign_name", placeholder="Enter your full name")
-            new_email = st.text_input("Email address", key="sign_email", placeholder="Enter your email")
-            new_password = st.text_input("Password", type="password", key="sign_pass", placeholder="Enter a password")
-            gender = st.radio(
-                "Gender",
-                options=["F", "M"],
-                key="sign_gender",
-                horizontal=True
-            )
+                            st.success(f"Login exitoso: {st.session_state.user['name']}")
+                            st.rerun()
+                        else:
+                            st.error(f"Usuario '{detected_clean}' reconocido pero no está en DB.")
+                            st.session_state.cand_hits = 0
+                            
+            except queue.Empty:
+                pass
+                
+        # 3. MENÚ DE REGISTRO FACIAL (Solo visible si no estás logueado y la cámara está activa)
+        st.markdown("---")
+        with st.expander("📸 Create Facial Profile (Register Face)", expanded=False):
+            st.write("To create a facial profile, enter your name.")
+            reg_name = st.text_input("Enter your Name:")
+            col_btn1, col_btn2 = st.columns(2)
             
-
-            if st.button("Sign in / Create", key="sign_btn"):
-                # Aquí podrías añadir la lógica de creación de cuenta
-                if new_email and new_password and new_name:
-                    # Generar nuevo customer_id con formato CUST-00001
-                    new_customer_id = f"CUST-{last_id_num + 1:05d}"
-
-                    # Crear DataFrame del nuevo cliente
-                    new_customer = pd.DataFrame([{
-                        "customer_id": new_customer_id,
-                        "name": new_name,
-                        "email": new_email,
-                        "pass": new_password,
-                        "gender": gender
-                    }])
-                    dm.save_df(new_customer, "CustomerInfo", if_exists="append")
-                    st.success(f"Account created for {new_name}! You can now log in.")
-                    st.session_state.df_clientes = dm.read_df("CustomerInfo")
+            if col_btn1.button("▶ Start Capture"):
+                if reg_name and ctx.video_processor:
+                    ctx.video_processor.start_capture_sequence(reg_name)
+                elif not ctx.video_processor:
+                    st.warning("Start camera first.")
                 else:
-                    st.error("Please fill all fields")
+                    st.warning("Enter a name.")
 
+            if col_btn2.button("⏭ Next Phase"):
+                if ctx.video_processor:
+                    ctx.video_processor.continue_next_phase()
 
+# CASO 2: LOGUEADO -> MOSTRAR PERFIL + CÁMARA DE EMOCIONES
+    else:
+        # 1. Cabecera de Usuario
+        st.success("✅ Identificación Verificada")
+        
+        col_info, col_cam = st.columns([1, 2])
+        
+        with col_info:
+            st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3>Hola, {st.session_state.user['name']}</h3>
+                <p><strong>ID:</strong> {st.session_state.user['customer_id']}</p>
+                <p>Bienvenido al sistema de análisis de experiencia de cliente.</p>
+                <div style="font-size: 40px; margin-top:10px;">👤</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("Cerrar Sesión"):
+                st.session_state.logged_in = False
+                st.session_state.user = None
+                st.session_state.cand_hits = 0
+                st.rerun()
+
+        with col_cam:
+            st.write("### Análisis Emocional en Tiempo Real")
+            st.info("Monitorizando niveles de Satisfacción y Frustración...")
+            
+            # 2. INICIAR LA CÁMARA DE EMOCIONES
+            ctx_emotion = webrtc_streamer(
+                key="emotion_cam",
+                video_processor_factory=EmotionLiveProcessor,
+                media_stream_constraints={
+                    "video": {"width": 1024, "height": 768}, 
+                    "audio": False
+                },
+                async_processing=True,
+                desired_playing_state=True
+            )
+
+            # ------------------------------------------------------------------
+            # PASO DE DATOS: Inyectamos el ID del usuario al procesador
+            # ------------------------------------------------------------------
+            if ctx_emotion.video_processor:
+                ctx_emotion.video_processor.update_user_info(
+                    customer_id=st.session_state.user['customer_id'],
+                    session_id=st.session_state.get("session_id", "Unknown")
+                )
 # -------- LEFT PANEL ----------
 with left_col:
     if st.session_state.active_tab == "Home":
@@ -429,7 +492,7 @@ with right_col:
 
         elif st.session_state.active_tab == "Recommendations & Promotions":
             st.subheader("**PROMOTIONS**")
-            if st.session_state.df_user_recs.empty:
+            if st.session_state.df_user_proms.empty:
                 st.info("You have no promotions yet.")
             else:
                 proms = st.session_state.df_user_proms[["product_id", "discount_percentage"]]
