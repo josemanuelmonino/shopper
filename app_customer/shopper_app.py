@@ -8,7 +8,7 @@ import time
 import pandas as pd
 import uuid
 import queue
-from src.ml_analytics.facialrecognition import FaceEmotionProcessor, EmotionLiveProcessor
+from src.ml_analytics.facial_emotion_engineimport FaceEmotionProcessor, EmotionLiveProcessor
 
 # -------- CONFIG ----------
 st.set_page_config(page_title="Shopper", layout="wide")
