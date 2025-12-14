@@ -2,9 +2,11 @@ from pathlib import Path
 import pandas as pd
 from setup_db import setup_db  # Tu setup.py
 from simulation.sales_simulator import SalesSimulator
+from simulation.trayectory_simulator import generate_bag_positions
 from ml_analytics.customer_profile_analytics import CustProfileAnalytics
 from ml_analytics.recom_prom_engine import RecommendationEngine
 from ml_analytics.dynamic_pricing_engine import DynamicPricingEngine
+from ml_analytics.heatmap_analytics import generate_heatmaps_per_customer
 from db_manager import DataManagerSimple
 
 # Definimos rutas
@@ -63,7 +65,7 @@ def main():
     print("-"*60)
     dm.save_df(df_purchase, "Purchase", if_exists="append")
     dm.save_df(df_purchase_item, "Purchase_Item", if_exists="append")
-    dm.save_df(df_items, "Item", if_exists="append")
+    dm.save_df(df_items, "Item")
     print("✅ Datos de simulación guardados correctamente.\n")
 
     # ---------------------------------------------------------
@@ -150,7 +152,21 @@ def main():
 
     # Calculamos nuevos precios y los guardamos
     df_ropa_dp = DPE.apply_best_prices()
-    dm.save_df(df_ropa_dp, "Product", if_exists="replace")
+    dm.save_df(df_ropa_dp, "Product")
+
+    # ---------------------------------------------------------
+    # 8. Motor de Precios Dinámicos
+    #    Generamos una simulación especial solo para DP
+    # ---------------------------------------------------------
+
+    print("\n→ Generando trayectorias y generación de heatmaps.\n")
+    # Generación de trayectorias
+    df_bagpositions = generate_bag_positions(20000)
+    dm.save_df(df_bagpositions, "BagPosition", if_exists="append")
+
+    # Generación de heatmaps
+    df_heatmaps = generate_heatmaps_per_customer(df_bagpositions)
+    dm.save_df(df_heatmaps, "CustomerHeatmap", if_exists="append")
 
 if __name__ == "__main__":
     main()

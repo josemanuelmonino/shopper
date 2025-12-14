@@ -16,9 +16,6 @@ class RecommendationEngine:
         self.df_ropa = df_ropa
         self.df_items = df_items
 
-        # Combinar items y catálogo
-        self.df_catalogo = self.df_items.merge(self.df_ropa, on="product_id", how="left")
-
         # Calcular top productos por cluster
         self._compute_top_products_per_cluster()
 
@@ -47,8 +44,13 @@ class RecommendationEngine:
     # Calcular pesos de productos según preferencias y top products
     # ---------------------------------------------------------
     def _compute_product_weights(self, customer_row, cluster_row, df_emotions=None, df_locations=None):
-        df = self.df_catalogo.copy()
+        df = self.df_ropa.copy()
         df["weight"] = 1.0
+
+        # Filtrado por talla existente
+        talla_pref = customer_row["size_preference"]
+        product_ids_validos = self.df_items.loc[self.df_items["size"] == talla_pref, "product_id"].unique()
+        df = df[df["product_id"].isin(product_ids_validos)].copy()
 
         # Preferencias del cliente
         df.loc[df["category"] == customer_row["category_preference"], "weight"] += 1.3
@@ -57,9 +59,6 @@ class RecommendationEngine:
         # Refuerzo para top products del cluster
         top_products = cluster_row.get("top_products", [])
         df.loc[df["product_id"].isin(top_products), "weight"] += 1.6
-
-        # Filtrar items solo de la talla preferida del cliente
-        df = df[df["size"] == customer_row["size_preference"]]
 
         # Normalizar pesos entre 0 y 1
         if not df.empty:

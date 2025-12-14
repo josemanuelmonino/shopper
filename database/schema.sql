@@ -104,7 +104,6 @@ CREATE TABLE IF NOT EXISTS EmotionEvent (
 
 -- Tabla de posiciones de bolsas (para heatmaps)
 CREATE TABLE IF NOT EXISTS BagPosition (
-    position_id INTEGER PRIMARY KEY AUTOINCREMENT,
     bag_id TEXT NOT NULL,
     customer_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
@@ -113,6 +112,14 @@ CREATE TABLE IF NOT EXISTS BagPosition (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES CustomerInfo(customer_id),
     FOREIGN KEY (session_id) REFERENCES ShoppingSession(session_id)
+);
+
+-- Tabla de heatmaps
+CREATE TABLE IF NOT EXISTS CustomerHeatmap (
+    customer_id TEXT NOT NULL,
+    heatmap BLOB NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES CustomerInfo(customer_id)
 );
 
 -- Tabla de recomendaciones generadas
