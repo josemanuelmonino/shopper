@@ -140,7 +140,7 @@ class FaceEmotionProcessor(VideoTransformerBase):
     # ==========================================================
     # LÓGICA DE CAPTURA (REGISTRO)
     # ==========================================================
-# ==========================================================
+    # ==========================================================
     # LÓGICA DE CAPTURA (REGISTRO) - MODIFICADO
     # ==========================================================
     def start_capture_sequence(self, name, customer_id_folder=None):
