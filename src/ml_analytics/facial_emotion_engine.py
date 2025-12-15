@@ -42,9 +42,9 @@ class FaceEmotionProcessor(VideoTransformerBase):
         # Configuración de captura
         self.PHASES = ["frontal", "izquierda", "derecha"]
         self.CAPTURE_CONFIG = {
-            "frontal":   {"frames": 30, "keep": 2, "msg": "Mira al frente"},
-            "izquierda": {"frames": 15, "keep": 1, "msg": "Mira ligeramente hacia la izquierda"},
-            "derecha":   {"frames": 15, "keep": 1, "msg": "Mira ligeramente hacia la derecha"},
+            "frontal":   {"frames": 30, "keep": 3, "msg": "Mira al frente"},
+            "izquierda": {"frames": 15, "keep": 3, "msg": "Mira ligeramente hacia la izquierda"},
+            "derecha":   {"frames": 15, "keep": 3, "msg": "Mira ligeramente hacia la derecha"},
         }
         self.SHARPNESS_MIN = 60.0 
 
@@ -140,14 +140,26 @@ class FaceEmotionProcessor(VideoTransformerBase):
     # ==========================================================
     # LÓGICA DE CAPTURA (REGISTRO)
     # ==========================================================
-    def start_capture_sequence(self, name):
-        self.frozen_person_name = name
+# ==========================================================
+    # LÓGICA DE CAPTURA (REGISTRO) - MODIFICADO
+    # ==========================================================
+    def start_capture_sequence(self, name, customer_id_folder=None):
+        """
+        Inicia la secuencia de captura.
+        :param name: Nombre "humano" para mostrar en logs/pantalla.
+        :param customer_id_folder: (Opcional) ID real para crear la carpeta (ej: CUST-00041).
+                                   Si es None, usa 'name'.
+        """
+        # Si nos pasan un ID específico, usamos ese para la carpeta.
+        # Si no, usamos el nombre (comportamiento antiguo).
+        self.frozen_person_name = customer_id_folder if customer_id_folder else name
+        
         self.capture_mode = True
         self.capture_phase_idx = 0
         self.capture_buffer = []
         self.phase_completed = False
         self.quiet_cap_until = time.time() + 3.0 
-        print(f"[INFO] Iniciando captura para: {name}")
+        print(f"[INFO] Iniciando captura para: {name} (Carpeta: {self.frozen_person_name})")
 
     def continue_next_phase(self):
         if self.phase_completed:

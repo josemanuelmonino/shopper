@@ -297,7 +297,7 @@ with center_col:
     
     # CASO 1: NO LOGUEADO -> MOSTRAR CÁMARA Y BUSCAR
     if not st.session_state.logged_in:
-        st.write("###Face Login System")
+        st.write("### Face Login System")
         
         # 1. INICIAR EL STREAMER (Solo si no estamos logueados)
         ctx = webrtc_streamer(
@@ -323,7 +323,7 @@ with center_col:
                     detected_clean = str(detected_name).strip()
                     
                     # Feedback visual
-                    st.toast(f"Detectado: {detected_clean} (Hits: {st.session_state.cand_hits})")
+                    st.toast(f"Detected: {detected_clean} (Hits: {st.session_state.cand_hits})")
 
                     if st.session_state.cand_id == detected_clean:
                         st.session_state.cand_hits += 1
@@ -332,7 +332,7 @@ with center_col:
                         st.session_state.cand_hits = 0
 
                     # --- LOGIN ÉXITO ---
-                    if st.session_state.cand_hits >= 2:
+                    if st.session_state.cand_hits >= 1:
                         st.session_state.df_clientes = dm.read_df("CustomerInfo")
                         dfc = st.session_state.df_clientes.copy()
 
@@ -347,7 +347,7 @@ with center_col:
                             st.session_state.logged_in = True
                             st.session_state.session_id = str(uuid.uuid4())
 
-                            # ✅ IMPORTANTE: cargar recs/promos al loguear (esto viene de tu versión)
+                            # IMPORTANTE: cargar recs/promos al loguear (esto viene de tu versión)
                             customer_id = st.session_state.user["customer_id"]
                             st.session_state.df_user_recs = st.session_state.df_recomms[
                                 st.session_state.df_recomms["customer_id"] == customer_id
@@ -356,89 +356,175 @@ with center_col:
                                 st.session_state.df_proms["customer_id"] == customer_id
                             ]
 
-                            st.success(f"Login exitoso: {st.session_state.user['name']}")
+                            st.success(f"Login successful: {st.session_state.user['name']}")
                             st.rerun()
                         else:
-                            st.error(f"Usuario '{detected_clean}' reconocido pero no está en DB.")
+                            st.error(f"User '{detected_clean}' recognized but not in DB.")
                             st.session_state.cand_hits = 0
                             
             except queue.Empty:
                 pass
                 
-        # 3. MENÚ DE REGISTRO FACIAL (Solo visible si no estás logueado y la cámara está activa)
+        # 3. MENÚ DE REGISTRO FACIAL 
         st.markdown("---")
-        with st.expander("📸 Create Facial Profile (Register Face)", expanded=False):
-            st.write("To create a facial profile, enter your name.")
-            reg_name = st.text_input("Enter your Name:")
+        with st.expander("📸 Create Facial Profile (Register)", expanded=False):
+            st.write("To register, enter your details first.")
+            
+            # Formulario rápido para generar el ID antes de la foto
+            reg_name = st.text_input("Full Name:", key="reg_face_name")
+            reg_email = st.text_input("Email:", key="reg_face_email")
+            reg_gender = st.radio("Gender:", ["F", "M"], horizontal=True, key="reg_face_gender")
+            
             col_btn1, col_btn2 = st.columns(2)
             
-            if col_btn1.button("▶ Start Capture"):
-                if reg_name and ctx.video_processor:
-                    ctx.video_processor.start_capture_sequence(reg_name)
+            # BOTÓN 1: Crear Usuario + Iniciar Captura
+            if col_btn1.button("▶ Create User and Start Capture"):
+                if reg_name and reg_email and ctx.video_processor:
+                    try:
+                        # 1. Calcular nuevo ID (CUST-XXXX)
+                        if not st.session_state.df_clientes.empty:
+                            last_id = st.session_state.df_clientes["customer_id"].str.replace("CUST-", "").astype(int).max()
+                            new_id_num = last_id + 1
+                        else:
+                            new_id_num = 1
+                        
+                        new_cust_id = f"CUST-{new_id_num:05d}"
+                        
+                        # 2. Guardar en DB (Provisionalmente sin contraseña o con una default)
+                        new_customer = pd.DataFrame([{
+                            "customer_id": new_cust_id, 
+                            "name": reg_name, 
+                            "email": reg_email, 
+                            "pass": "1234", # Contraseña por defecto o pide input
+                            "gender": reg_gender
+                        }])
+                        
+                        dm.save_df(new_customer, "CustomerInfo", if_exists="append")
+                        # Recargar df local
+                        st.session_state.df_clientes = dm.read_df("CustomerInfo")
+                        
+                        st.success(f"User created: {new_cust_id}. Look at the camera.")
+                        
+                        # 3. Iniciar Captura usando el ID como nombre de carpeta
+                        ctx.video_processor.start_capture_sequence(
+                            name=reg_name, 
+                            customer_id_folder=new_cust_id  # USA EL ID COMO NOMBRE DE CARPETA
+                        )
+                        
+                    except Exception as e:
+                        st.error(f"Error creating user: {e}")
+                        
                 elif not ctx.video_processor:
-                    st.warning("Start camera first.")
+                    st.warning("Please start the camera first (above).")
                 else:
-                    st.warning("Enter a name.")
+                    st.warning("Fill in name and email.")
 
-            if col_btn2.button("⏭ Next Phase"):
+            # BOTÓN 2: Siguiente Fase 
+            if col_btn2.button("⏭ Next Phase / Finish"):
                 if ctx.video_processor:
                     ctx.video_processor.continue_next_phase()
 
-# CASO 2: LOGUEADO -> MOSTRAR PERFIL + CÁMARA DE EMOCIONES
+    # ==============================================================================
+    # CASO 2: LOGUEADO -> PERFIL + (CÁMARA DE EMOCIONES O CÁMARA DE REGISTRO)
+    # ==============================================================================
     else:
-        # 1. Cabecera de Usuario
-        st.success("✅ Identificación Verificada")
+        st.success("Identity Verified")
         
         col_info, col_cam = st.columns([1, 2])
         
         with col_info:
             st.markdown(f"""
             <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                <h3>Hola, {st.session_state.user['name']}</h3>
+                <h3>Hello, {st.session_state.user['name']}</h3>
                 <p><strong>ID:</strong> {st.session_state.user['customer_id']}</p>
-                <p>Bienvenido al sistema de análisis de experiencia de cliente.</p>
+                <p>Welcome to the customer experience analysis system.</p>
                 <div style="font-size: 40px; margin-top:10px;">👤</div>
             </div>
             """, unsafe_allow_html=True)
             
-            if st.button("Cerrar Sesión"):
+            # --- INTERRUPTOR DE MODO ---
+            st.write("**Camera Settings:**")
+            # Si se activa, update_mode será True
+            update_mode = st.toggle("📸 Update/Register Facial Photos")
+            
+            st.markdown("---")
+            if st.button("Log Out"):
                 st.session_state.logged_in = False
                 st.session_state.user = None
                 st.session_state.cand_hits = 0
                 st.rerun()
 
         with col_cam:
-            st.write("### Análisis Emocional en Tiempo Real")
-            st.info("Monitorizando niveles de Satisfacción y Frustración...")
             
-            # 2. INICIAR LA CÁMARA DE EMOCIONES
-            ctx_emotion = webrtc_streamer(
-                key="emotion_cam",
-                video_processor_factory=EmotionLiveProcessor,
-                media_stream_constraints={
-                    "video": {"width": 1024, "height": 768}, 
-                    "audio": False
-                },
-                async_processing=True,
-                desired_playing_state=True
-            )
-
             # ------------------------------------------------------------------
-            # PASO DE DATOS: Inyectamos el ID del usuario al procesador
+            # MODO A: REGISTRO/ACTUALIZACIÓN DE FOTOS (FaceEmotionProcessor)
             # ------------------------------------------------------------------
-            if ctx_emotion.video_processor:
-                ctx_emotion.video_processor.update_user_info(
-                    customer_id=st.session_state.user['customer_id'],
-                    session_id=st.session_state.get("session_id", "Unknown")
+            if update_mode:
+                st.write("### 📸 Update Biometric Data")
+                st.warning("New photos will be added to your ID folder.")
+                
+                # Usamos el procesador de captura
+                ctx_update = webrtc_streamer(
+                    key="update_face_cam", # Key diferente para forzar recarga
+                    video_processor_factory=FaceEmotionProcessor,
+                    media_stream_constraints={
+                        "video": {"width": 1280, "height": 720}, 
+                        "audio": False
+                    },
+                    async_processing=True,
+                    desired_playing_state=True,
                 )
+
+                # Controles de captura (Solo si la cámara está activa)
+                if ctx_update.video_processor:
+                    col_b1, col_b2 = st.columns(2)
+                    
+                    if col_b1.button("▶ Start Capture (Add Photos)"):
+                        # AQUÍ ESTÁ LA CLAVE: Usamos el ID del usuario logueado
+                        current_id = st.session_state.user['customer_id']
+                        current_name = st.session_state.user['name']
+                        
+                        ctx_update.video_processor.start_capture_sequence(
+                            name=current_name,
+                            customer_id_folder=current_id # <--- Guarda en SU carpeta existente
+                        )
+                        st.toast(f"Capturing for: {current_id}")
+
+                    if col_b2.button("⏭ Next Phase"):
+                        ctx_update.video_processor.continue_next_phase()
+            
+            # ------------------------------------------------------------------
+            # MODO B: ANÁLISIS EMOCIONAL (EmotionLiveProcessor) - DEFAULT
+            # ------------------------------------------------------------------
+            else:
+                st.write("### Real-Time Emotional Analysis")
+                st.info("Monitoring Satisfaction and Frustration levels...")
+                
+                # Usamos el procesador de emociones
+                ctx_emotion = webrtc_streamer(
+                    key="emotion_cam",
+                    video_processor_factory=EmotionLiveProcessor,
+                    media_stream_constraints={
+                        "video": {"width": 1024, "height": 786}, 
+                        "audio": False
+                    },
+                    async_processing=True,
+                    desired_playing_state=True
+                )
+
+                # Pasamos datos al procesador de emociones
+                if ctx_emotion.video_processor:
+                    ctx_emotion.video_processor.update_user_info(
+                        customer_id=st.session_state.user['customer_id'],
+                        session_id=st.session_state.get("session_id", "Unknown")
+                    )
+                    
 # -------- LEFT PANEL ----------
 with left_col:
     if st.session_state.active_tab == "Home":
         st.header(f"{st.session_state.active_tab}")
         st.markdown("""
-            **Welcome to the SHOPPER project!**  
-
-            The SHOPPER project proposes an innovative system that transforms the in-store shopping experience through the integration of advanced technologies such as RFID, BLE tracking, smart mirrors, and Emotion AI. By combining real-time data analysis with personalized recommendations and dynamic pricing, SHOPPER enables fashion retailers to optimize store management, improve customer satisfaction, and bridge the gap between physical and digital retail environments.
+            **Welcome to the SHOPPER project!** The SHOPPER project proposes an innovative system that transforms the in-store shopping experience through the integration of advanced technologies such as RFID, BLE tracking, smart mirrors, and Emotion AI. By combining real-time data analysis with personalized recommendations and dynamic pricing, SHOPPER enables fashion retailers to optimize store management, improve customer satisfaction, and bridge the gap between physical and digital retail environments.
 
             **Created at the UPM** by Lucia Pintos, José Moñino, Cristina García-Yañez, and Miguel Ángel Conde.
             
@@ -512,3 +598,4 @@ with right_col:
             st.subheader("**CART**")
             st.markdown("---")
             mostrar_carrito()
+            
