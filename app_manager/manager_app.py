@@ -40,6 +40,10 @@ if "df_purchase_items" not in st.session_state:
     st.session_state.df_purchase_items = dm.read_df("PurchaseItem")
 if "df_heatmaps" not in st.session_state:
     st.session_state.df_heatmaps = dm.read_df("CustomerHeatmap")
+if "df_heatmaps" not in st.session_state:
+    st.session_state.df_heatmaps = dm.read_df("CustomerHeatmap")
+if "df_emotions" not in st.session_state:
+    st.session_state.df_emotions = dm.read_df("EmotionEvent")
 
 # -------- LOGIN SIMPLE --------
 def login():
@@ -248,6 +252,152 @@ def show_customer_profiles():
         size_max=15
     )
     st.plotly_chart(fig, use_container_width=True)
+
+def parse_emotion_json(json_str, target_emotion):
+    """Extrae el valor de una emoción específica del string JSON almacenado en la BD."""
+    try:
+        data = json.loads(json_str)
+        if isinstance(data, dict):
+            return data.get(target_emotion, 0.0)
+        return 0.0
+    except:
+        return 0.0
+
+def show_emotions_alerts():
+    st.subheader("Emotions & Alerts Analytics")
+    
+    # 1. Cargar datos
+    df = st.session_state.df_emotions.copy()
+    
+    if df.empty:
+        st.warning("No emotion events recorded in the database.")
+        return
+
+    # Asegurar formato de fecha
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # 2. KPIs Globales
+    # Definimos "Alerta" como Frustración > 0.5 (50%)
+    frustration_events = df[df["group_label"] == "frustration"]
+    high_frustration = frustration_events[frustration_events["avg_window"] > 0.5]
+    
+    total_alerts = len(high_frustration)
+    dominant_mood = df["group_label"].mode()[0] if not df.empty else "N/A"
+    avg_intensity = df["avg_window"].mean()
+
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Frustration Alerts (>50%)", total_alerts, delta_color="inverse")
+    k2.metric("Dominant Store Emotion", dominant_mood.capitalize())
+    k3.metric("Average intensity", f"{avg_intensity:.1f}")
+
+    st.divider()
+
+    # 3. Gráfica de Evolución Temporal (Timeline)
+    st.subheader("Customer Emotional Journey")
+    
+    c1, c2 = st.columns([1, 3])
+    
+    with c1:
+        # Selectores para filtrar
+        customer_list = df["customer_id"].unique()
+        selected_customer = st.selectbox("Select Customer", customer_list)
+        
+        cust_df = df[df["customer_id"] == selected_customer].sort_values("timestamp")
+        
+        session_list = cust_df["session_id"].unique()
+        selected_session = st.selectbox("Select Session", session_list)
+        
+        # Datos filtrados finales
+        session_df = cust_df[cust_df["session_id"] == selected_session].copy()
+
+    with c2:
+        if not session_df.empty:
+            # Transformar los datos JSON para Plotly
+            plot_data = []
+            target_emotions = ["frustration", "happiness", "surprise", "neutral"]
+            
+            for _, row in session_df.iterrows():
+                t = row["timestamp"]
+                json_str = row["emotions"]
+                for emo in target_emotions:
+                    val = parse_emotion_json(json_str, emo)
+                    plot_data.append({"Time": t, "Emotion": emo.capitalize(), "Score": val})
+            
+            df_plot = pd.DataFrame(plot_data)
+
+            # Colores corporativos/semánticos
+            color_map = {
+                "Frustration": "#FF4B4B",  # Rojo
+                "Happiness": "#2ECC71",    # Verde
+                "Surprise": "#3498DB",     # Azul
+                "Neutral": "#95A5A6"       # Gris
+            }
+
+            fig = px.line(
+                df_plot, 
+                x="Time", 
+                y="Score", 
+                color="Emotion",
+                color_discrete_map=color_map,
+                title=f"Emotional Evolution - Session: {selected_session}",
+                markers=True
+            )
+            fig.update_layout(yaxis_title="Intensity Score (0-100)", hovermode="x unified")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No data available for this session.")
+
+    st.divider()
+    
+    # 4. Distribución y Tabla de Alertas
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.subheader("Global Emotion Distribution")
+        grouped_counts = df["group_label"].value_counts().reset_index()
+        grouped_counts.columns = ["Emotion", "Count"]
+        
+        fig_pie = px.pie(
+            grouped_counts, 
+            names="Emotion", 
+            values="Count", 
+            hole=0.4,
+            color="Emotion",
+            color_discrete_map={
+                "frustration": "#FF4B4B", 
+                "happiness": "#2ECC71", 
+                "surprise": "#3498DB", 
+                "neutral": "#95A5A6"
+            }
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    with col_right:
+        st.subheader("Recent High Intensity Alerts")
+        if not high_frustration.empty:
+            # Preparamos tabla bonita
+            alerts_display = high_frustration[["timestamp", "customer_id", "avg_window"]].copy()
+            alerts_display = alerts_display.sort_values("timestamp", ascending=False).head(10)
+            alerts_display.rename(columns={"avg_window": "Intensity", "customer_id": "Customer"}, inplace=True)
+            
+            st.dataframe(
+                alerts_display, 
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "timestamp": st.column_config.DatetimeColumn("Time", format="D MMM, HH:mm:ss"),
+                    "Intensity": st.column_config.ProgressColumn(
+                        "Frustration Level", 
+                        format="%.1f", 
+                        min_value=0, 
+                        max_value=100  # Updated to 100 based on your data
+                    )
+                }
+            )
+        else:
+            st.success("No recent frustration alerts detected.")
+
+
 # -------- HEADER ----------
 logo_path = r"data/raw/shopper-high-resolution-logo-transparent.png"
 hcol1, hcol2 = st.columns([1, 5])
@@ -291,5 +441,4 @@ if st.session_state.logged_in:
     elif st.session_state.active_tab == "Customer Profiles":
         show_customer_profiles()
     else: #Emotions & Alerts
-        # show_emotions_alerts()
-        ...
+        show_emotions_alerts()
