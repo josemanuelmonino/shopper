@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Frontend-Streamlit-red)
-![Computer Vision](https://img.shields.io/badge/SFacev8%20%7C%20DeepFace-green)
+![Computer Vision](https://img.shields.io/badge/SFace%20%7C%20DeepFace-green)
 ![Machine Learning](https://img.shields.io/badge/LightGBM%20%7C%20MiniBatchKMeans-yellow)
 ![Status](https://img.shields.io/badge/Status-Prototype-orange)
 
