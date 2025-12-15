@@ -273,7 +273,7 @@ class FaceEmotionProcessor(VideoTransformerBase):
                 color = (0, 255, 0) if self.last_face_name != "Unknown" else (0, 0, 255)
                 cv2.rectangle(frame_vis, (x, y), (x+w, y+h), color, 2)
 
-                # ✅ RECONOCIMIENTO SOLO EN MODO IDENTIFICACIÓN
+                # RECONOCIMIENTO SOLO EN MODO IDENTIFICACIÓN
                 if (self.locked_identity is None) and self.recognition_enabled:
                     if self.frame_count % self.RECOG_EVERY == 0:
                         if self.pending_future is None or self.pending_future.done():
