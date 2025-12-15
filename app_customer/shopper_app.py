@@ -438,7 +438,7 @@ with center_col:
                 <h3>Hello, {st.session_state.user['name']}</h3>
                 <p><strong>ID:</strong> {st.session_state.user['customer_id']}</p>
                 <p>Welcome to the customer experience analysis system.</p>
-                <div style="font-size: 40px; margin-top:10px;">👤</div>
+                <div style="font-size: 40px; margin-top:10px;"></div>
             </div>
             """, unsafe_allow_html=True)
             
