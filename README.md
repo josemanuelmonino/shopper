@@ -111,7 +111,7 @@ conda env create -f environment.yml
 conda activate shopper
 ```
 
-3. **Initialize the database**
+(Optional) **You may initialize the database, although it is already created.**
 
 ```bash
 python src/setup_db.py
